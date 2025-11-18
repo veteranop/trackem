@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_view_details"
+        android:title="View Details" />
+    <item
+        android:id="@+id/action_target_device"
+        android:title="Target Device" />
+    <item
+        android:id="@+id/action_ignore_device"
+        android:title="Ignore Device" />
+</menu>

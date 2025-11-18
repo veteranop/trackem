@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Theme Colors -->
+    <color name="brand_purple">#6A3E9C</color>
+    <color name="brand_purple_dark">#4A2C6D</color>
+    <color name="brand_green">#00FF00</color>
+    
+    <!-- Standard Colors -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Signal Strength Colors -->
+    <color name="rssi_strong">#00FF00</color> <!-- Bright Green -->
+    <color name="rssi_medium">#FFFF00</color> <!-- Yellow -->
+    <color name="rssi_weak">#FF0000</color>   <!-- Red -->
+</resources>
