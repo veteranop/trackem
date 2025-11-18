@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_set_wigle_key"
+        android:title="Set WiGLE Credentials" />
+    <item
+        android:id="@+id/action_set_shodan_key"
+        android:title="Set Shodan API Key" />
+</menu>
