@@ -14,7 +14,7 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun TRACKEMMobileTheme(content: @Composable () -> Unit) {
+fun TrackEmMobileTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = DarkColors,
         content = content

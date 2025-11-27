@@ -174,14 +174,14 @@
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_map_all"
+        android:id="@+id/fabMapAll"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
-        android:src="@android:drawable/ic_dialog_map"
-        app:layout_anchor="@id/scan_layout"
-        app:layout_anchorGravity="bottom|end"
-        android:contentDescription="Map All Devices" />
+        android:src="@android:drawable/ic_menu_mapmode"
+        app:backgroundTint="@color/purple_500"
+        app:tint="@android:color/white"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
