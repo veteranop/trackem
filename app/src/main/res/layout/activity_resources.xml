@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1C1C1E"
+    android:padding="16dp"
+    tools:context=".ResourcesActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- How to Use Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="How to Use TrackEm"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="1. Grant all requested permissions. For full Wi-Fi scanning capabilities, the app requires 'Allow all the time' location access.\n\n2. From the main screen, choose a scan type:\n   • Scan for Mobile Devices: The most comprehensive scan to find phones, laptops, and other personal devices.\n   • Scan for Wi-Fi APs: Focuses only on Wi-Fi routers and access points.\n   • Scan for Bluetooth Devices: Finds BLE-only devices like headphones and fitness trackers.\n\n3. Tap on any device in the list to open the action menu where you can view details, map the device (if location data is available), set a custom name (alias), or ignore it."
+            android:textColor="#E0E0E0"
+            android:textSize="16sp"
+            android:lineSpacingMultiplier="1.2"/>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="16dp"
+            android:background="#3A3A3C" />
+
+        <!-- WiGLE API Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="How to get a WiGLE API Key"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="The WiGLE (Wireless Geographic Logging Engine) API allows TrackEm to map the physical location of Wi-Fi access points.\n\n1. Go to wigle.net and create a free account.\n2. Log in and navigate to your account page.\n3. At the bottom, find the 'API Access' section.\n4. Copy your 'API Name' (it will look like 'AID...') and your 'API Token'.\n5. In TrackEm, tap the 'APIs' button and select 'Set WiGLE Key'.\n6. Paste your API Name and API Token into the respective fields and save."
+            android:textColor="#E0E0E0"
+            android:textSize="16sp"
+            android:lineSpacingMultiplier="1.2"/>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="16dp"
+            android:background="#3A3A3C" />
+
+        <!-- Shodan API Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="How to get a Shodan API Key"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Shodan is a search engine for internet-connected devices. The API allows TrackEm to look up public information about a device's MAC address.\n\n1. Go to shodan.io and create a free account.\n2. Log in and navigate to your 'Account' page.\n3. Your API Key will be visible on this page.\n4. In TrackEm, tap the 'APIs' button and select 'Set Shodan Key'.\n5. Paste your key into the dialog and save."
+            android:textColor="#E0E0E0"
+            android:textSize="16sp"
+            android:lineSpacingMultiplier="1.2"/>
+
+    </LinearLayout>
+</ScrollView>

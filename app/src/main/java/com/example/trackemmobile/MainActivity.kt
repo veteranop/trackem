@@ -18,13 +18,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.trackemmobile.databinding.ActivityMainBinding
@@ -51,131 +49,122 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        // After the dialog returns, onResume will handle re-checking permissions.
-    }
+    ) { /* handled in onResume */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize osmdroid configuration
+        // Initialize osmdroid
         Configuration.getInstance().load(applicationContext, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
 
+        // Inflate ViewBinding
         binding = ActivityMainBinding.inflate(layoutInflater)
 
-        // SWITCH TO COMPOSE THEMING — THIS FIXES ALL THEME ERRORS
+        // ONLY COMPOSE — NO setContentView() → fixes crash
         setContent {
             TrackEmMobileTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    setContentView(binding.root)
-
-                    // Initialize Analytics and log a test event
-                    firebaseAnalytics = Firebase.analytics
-                    firebaseAnalytics.logEvent("app_opened") {
-                        param("user_name", "Mark")
-                    }
-
-                    binding.trackemLogo.setImageResource(R.drawable.trackem_logo)
-
-                    binding.btnMobileDeviceScan.setOnClickListener { checkPermissionsAndStartScan(AppScanMode.MOBILE_DEVICES) }
-                    binding.btnBluetoothScan.setOnClickListener { checkPermissionsAndStartScan(AppScanMode.BLUETOOTH) }
-                    binding.btnWifiApScan.setOnClickListener { checkPermissionsAndStartScan(AppScanMode.WIFI_APS) }
-
-                    val deviceActionHandler: (DeviceFingerprint, String) -> Unit = { device, action ->
-                        when (action) {
-                            "details" -> {
-                                firebaseAnalytics.logEvent("view_device_details") {
-                                    param("device_mac", device.mac ?: "unknown")
-                                    param("device_type", device.makeModel)
-                                }
-                                val intent = Intent(this@MainActivity, DetailActivity::class.java).apply {
-                                    putExtra("device", device)
-                                }
-                                startActivity(intent)
-                            }
-                            "rename" -> showRenameDialog(device)
-                            "target" -> {
-                                targetDevice = device
-                                Toast.makeText(this@MainActivity, "Target set to ${device.finalDisplayName}", Toast.LENGTH_SHORT).show()
-                            }
-                            "ignore" -> {
-                                ignored.add(device.fingerprintKey())
-                                updateAllLists()
-                                Toast.makeText(this@MainActivity, "Ignoring ${device.finalDisplayName}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-
-                    mobileDeviceAdapter = DeviceAdapter(deviceActionHandler)
-                    wifiApAdapter = DeviceAdapter(deviceActionHandler)
-                    bleOnlyDeviceAdapter = DeviceAdapter(deviceActionHandler)
-
-                    binding.recyclerDevices.apply {
-                        layoutManager = LinearLayoutManager(this@MainActivity)
-                        adapter = mobileDeviceAdapter
-                    }
-
-                    binding.recyclerWifiApDevices.apply {
-                        layoutManager = LinearLayoutManager(this@MainActivity)
-                        adapter = wifiApAdapter
-                    }
-
-                    binding.recyclerBleOnlyDevices.apply {
-                        layoutManager = LinearLayoutManager(this@MainActivity)
-                        adapter = bleOnlyDeviceAdapter
-                    }
-
-                    binding.btnHome.setOnClickListener { showHome() }
-                    binding.btnStop.setOnClickListener {
-                        scanner?.stop()
-                        scanner = null
-                        showHome()
-                    }
-                    binding.btnPause.setOnClickListener {
-                        scanner?.let {
-                            if (it.isRunning) {
-                                it.stop()
-                                binding.btnPause.text = "Resume"
-                            } else {
-                                it.start()
-                                binding.btnPause.text = "Pause"
-                            }
-                        }
-                    }
-
-                    binding.btnApis.setOnClickListener { showApiMenu(it) }
-                    binding.btnResources.setOnClickListener {
-                        startActivity(Intent(this@MainActivity, ResourcesActivity::class.java))
-                    }
-                    binding.btnAbout.setOnClickListener { startActivity(Intent(this@MainActivity, AboutActivity::class.java)) }
-
-                    binding.fabMapAll.setOnClickListener {
-                        firebaseAnalytics.logEvent("map_all_devices_tapped", null)
-                        val allDevices = mobileDeviceAdapter.getCurrentList() + wifiApAdapter.getCurrentList() + bleOnlyDeviceAdapter.getCurrentList()
-                        val bssids = allDevices.mapNotNull { it.bestApBssidForWigle }.toTypedArray()
-                        if (bssids.isNotEmpty()) {
-                            val intent = Intent(this@MainActivity, MapActivity::class.java).apply {
-                                putExtra("bssids", bssids)
-                            }
-                            startActivity(intent)
-                        } else {
-                            Toast.makeText(this@MainActivity, "No BSSIDs to map", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                    // This safely embeds your entire XML layout into Compose
+                    AndroidView(factory = { binding.root })
                 }
+            }
+        }
+
+        // === ALL YOUR EXISTING CODE BELOW (unchanged) ===
+        firebaseAnalytics = Firebase.analytics
+        firebaseAnalytics.logEvent("app_opened") {
+            param("user_name", "Mark")
+        }
+
+        binding.trackemLogo.setImageResource(R.drawable.trackem_logo)
+
+        binding.btnMobileDeviceScan.setOnClickListener { checkPermissionsAndStartScan(AppScanMode.MOBILE_DEVICES) }
+        binding.btnBluetoothScan.setOnClickListener { checkPermissionsAndStartScan(AppScanMode.BLUETOOTH) }
+        binding.btnWifiApScan.setOnClickListener { checkPermissionsAndStartScan(AppScanMode.WIFI_APS) }
+
+        val deviceActionHandler: (DeviceFingerprint, String) -> Unit = { device, action ->
+            when (action) {
+                "details" -> {
+                    firebaseAnalytics.logEvent("view_device_details") {
+                        param("device_mac", device.mac ?: "unknown")
+                        param("device_type", device.makeModel)
+                    }
+                    startActivity(Intent(this, DetailActivity::class.java).apply {
+                        putExtra("device", device)
+                    })
+                }
+                "rename" -> showRenameDialog(device)
+                "target" -> {
+                    targetDevice = device
+                    Toast.makeText(this, "Target set to ${device.finalDisplayName}", Toast.LENGTH_SHORT).show()
+                }
+                "ignore" -> {
+                    ignored.add(device.fingerprintKey())
+                    updateAllLists()
+                    Toast.makeText(this, "Ignoring ${device.finalDisplayName}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        mobileDeviceAdapter = DeviceAdapter(deviceActionHandler)
+        wifiApAdapter = DeviceAdapter(deviceActionHandler)
+        bleOnlyDeviceAdapter = DeviceAdapter(deviceActionHandler)
+
+        binding.recyclerDevices.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = mobileDeviceAdapter
+        }
+        binding.recyclerWifiApDevices.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = wifiApAdapter
+        }
+        binding.recyclerBleOnlyDevices.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = bleOnlyDeviceAdapter
+        }
+
+        binding.btnHome.setOnClickListener { showHome() }
+        binding.btnStop.setOnClickListener {
+            scanner?.stop()
+            scanner = null
+            showHome()
+        }
+        binding.btnPause.setOnClickListener {
+            scanner?.let {
+                if (it.isRunning) {
+                    it.stop()
+                    binding.btnPause.text = "Resume"
+                } else {
+                    it.start()
+                    binding.btnPause.text = "Pause"
+                }
+            }
+        }
+
+        binding.btnApis.setOnClickListener { showApiMenu(it) }
+        binding.btnResources.setOnClickListener { startActivity(Intent(this, ResourcesActivity::class.java)) }
+        binding.btnAbout.setOnClickListener { startActivity(Intent(this, AboutActivity::class.java)) }
+
+        binding.fabMapAll.setOnClickListener {
+            firebaseAnalytics.logEvent("map_all_devices_tapped", null)
+            val allDevices = mobileDeviceAdapter.getCurrentList() + wifiApAdapter.getCurrentList() + bleOnlyDeviceAdapter.getCurrentList()
+            val bssids = allDevices.mapNotNull { it.bestApBssidForWigle }.toTypedArray()
+            if (bssids.isNotEmpty()) {
+                startActivity(Intent(this, MapActivity::class.java).apply {
+                    putExtra("bssids", bssids)
+                })
+            } else {
+                Toast.makeText(this, "No BSSIDs to map", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    // === ALL YOUR EXISTING METHODS BELOW (unchanged) ===
     override fun onResume() {
         super.onResume()
-        pendingScanMode?.let {
-            checkPermissionsAndStartScan(it)
-        }
+        pendingScanMode?.let { checkPermissionsAndStartScan(it) }
     }
 
     private fun updateAllLists() {
@@ -190,7 +179,6 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
 
     private fun checkPermissionsAndStartScan(mode: AppScanMode) {
         pendingScanMode = mode
-
         val permissionsToRequest = REQUIRED_PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
@@ -230,7 +218,6 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
                     if (customName.isBlank()) remove(deviceKey) else putString(deviceKey, customName)
                     apply()
                 }
-
                 device.customName = if (customName.isBlank()) null else customName
                 updateAllLists()
             }
@@ -243,9 +230,9 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
             .setTitle("Background Location Required")
             .setMessage("For continuous Wi-Fi scanning, this app requires 'Allow all the time' location permission.")
             .setPositiveButton("Go to Settings") { _, _ ->
-                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                intent.data = Uri.fromParts("package", packageName, null)
-                startActivity(intent)
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", packageName, null)
+                })
             }
             .setNegativeButton("Cancel") { dialog, _ ->
                 dialog.dismiss()
@@ -379,26 +366,25 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
     }
 
     companion object {
-        private val REQUIRED_PERMISSIONS =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_BACKGROUND_LOCATION,
-                    Manifest.permission.BLUETOOTH_SCAN,
-                    Manifest.permission.BLUETOOTH_CONNECT,
-                    Manifest.permission.ACCESS_WIFI_STATE,
-                    Manifest.permission.CHANGE_WIFI_STATE
-                )
-            } else {
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.BLUETOOTH_SCAN,
-                    Manifest.permission.BLUETOOTH_CONNECT,
-                    Manifest.permission.ACCESS_WIFI_STATE,
-                    Manifest.permission.CHANGE_WIFI_STATE
-                )
-            }
+        private val REQUIRED_PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_WIFI_STATE,
+                Manifest.permission.CHANGE_WIFI_STATE
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_WIFI_STATE,
+                Manifest.permission.CHANGE_WIFI_STATE
+            )
+        }
     }
 }

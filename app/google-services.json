@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "748254142306",
+    "project_id": "veteranopcom",
+    "storage_bucket": "veteranopcom.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:748254142306:android:9668ad26f7910e93bb963b",
+        "android_client_info": {
+          "package_name": "com.example.trackemmobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBmZAVzQuYbZymoSWeYL7oS3XZTUOwe-A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
