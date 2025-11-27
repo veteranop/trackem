@@ -13,6 +13,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.google.gson.Gson
+import com.veteranop.trackem.ui.hunting.HuntingViewModel
+import com.veteranop.trackem.utils.LocationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,13 +23,11 @@ import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
-// --- FIX: Rename ScanMode to AppScanMode to avoid conflict with Firebase ---
 enum class AppScanMode {
     MOBILE_DEVICES,
     BLUETOOTH,
     WIFI_APS
 }
-// --- End of Fix ---
 
 interface DeviceScannerListener {
     fun onDevicesUpdated(
@@ -40,9 +40,7 @@ interface DeviceScannerListener {
 class DeviceScanner(
     private val context: Context,
     private val listener: DeviceScannerListener,
-    // --- FIX: Use the new AppScanMode name ---
     private val mode: AppScanMode
-    // --- End of Fix ---
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private var wifiManager: WifiManager? = null
@@ -103,7 +101,6 @@ class DeviceScanner(
     fun start() {
         if (isRunning) return
         isRunning = true
-        // --- FIX: Use the new AppScanMode values ---
         when (mode) {
             AppScanMode.MOBILE_DEVICES, AppScanMode.WIFI_APS -> startWifiScan()
             AppScanMode.BLUETOOTH -> { /* No Wi-Fi */ }
@@ -111,7 +108,6 @@ class DeviceScanner(
         if (mode != AppScanMode.WIFI_APS) {
             startBleScan()
         }
-        // --- End of Fix ---
         handler.postDelayed(uiUpdateRunnable, UI_UPDATE_INTERVAL_MS)
     }
 
@@ -137,9 +133,7 @@ class DeviceScanner(
         isRunning = false
         handler.removeCallbacks(wifiScanRunnable)
         handler.removeCallbacks(uiUpdateRunnable)
-        try {
-            context.unregisterReceiver(wifiReceiver)
-        } catch (e: Exception) { /* Already unregistered */ }
+        try { context.unregisterReceiver(wifiReceiver) } catch (e: Exception) { }
         try {
             bluetoothAdapter?.bluetoothLeScanner?.stopScan(bleCallback)
         } catch (e: SecurityException) {
@@ -159,6 +153,19 @@ class DeviceScanner(
                 fp.displayName = result.SSID
             }
             fp.addWifiProbe(result.SSID, result.level, result.BSSID)
+
+// === HUNTING MODE – WIFI ===
+            if (HuntingViewModel.isHunting &&
+                result.BSSID.equals(HuntingViewModel.currentTargetMac, ignoreCase = true)) {
+
+                val location = LocationHelper.getLastLocation(context) ?: continue
+                HuntingViewModel.instance?.addSample(
+                    lat = location.latitude,
+                    lng = location.longitude,
+                    rssi = result.level
+                )
+            }
+// === END HUNTING ===
         }
     }
 
@@ -173,11 +180,26 @@ class DeviceScanner(
         val mfgData = result.scanRecord?.bytes?.let { bytesToHex(it) }
 
         fp.addBleSample(result.rssi, interval?.toInt(), txPower, mfgData)
+
+        // Try to get name (requires BLUETOOTH_CONNECT)
         try {
             fp.bleName = result.device.name
-        } catch(e: SecurityException) {
+        } catch (e: SecurityException) {
             Log.e(TAG, "Missing BLUETOOTH_CONNECT permission to get device name for $mac")
         }
+
+// === HUNTING MODE – BLE ===
+        if (HuntingViewModel.isHunting &&
+            result.device.address.equals(HuntingViewModel.currentTargetMac, ignoreCase = true)) {
+
+            val location = LocationHelper.getLastLocation(context) ?: return
+            HuntingViewModel.instance?.addSample(
+                lat = location.latitude,
+                lng = location.longitude,
+                rssi = result.rssi
+            )
+        }
+// === END HUNTING ===
     }
 
     private fun fetchVendorForDevice(fp: DeviceFingerprint) {
@@ -190,21 +212,14 @@ class DeviceScanner(
             override fun onFailure(call: Call, e: IOException) {
                 Log.e(TAG, "MAC lookup failed for $macToLookup", e)
             }
-
             override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "MAC lookup API error for $macToLookup: ${response.code}")
-                    return
-                }
-
+                if (!response.isSuccessful) return
                 try {
-                    val body = response.body?.string()
-                    if (body != null) {
-                        val result = gson.fromJson(body, MacLookupResult::class.java)
-                        if (result.success && result.found) {
-                            fp.macVendor = result.companyName
-                            fp.updateVendorInfo()
-                        }
+                    val body = response.body?.string() ?: return
+                    val result = gson.fromJson(body, MacLookupResult::class.java)
+                    if (result.success && result.found) {
+                        fp.macVendor = result.companyName
+                        fp.updateVendorInfo()
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to parse MAC lookup response for $macToLookup", e)
@@ -216,9 +231,7 @@ class DeviceScanner(
     private fun publishUpdate() {
         val now = System.currentTimeMillis()
         val expiredKeys = devices.filter { (now - it.value.lastSeen) > DEVICE_EXPIRATION_MS }.keys
-        if (expiredKeys.isNotEmpty()) {
-            expiredKeys.forEach { devices.remove(it) }
-        }
+        expiredKeys.forEach { devices.remove(it) }
 
         val allDevices = devices.values.toList()
         val wifiAps = allDevices.filter { it.isWifiAP }
