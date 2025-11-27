@@ -1,29 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:paddingTop="8dp"
-    android:paddingBottom="8dp"
-    android:gravity="center_vertical">
+    android:padding="12dp"
+    android:background="?android:attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- THIS ICON EXISTS ON EVERY ANDROID DEVICE SINCE API 1 -->
+    <ImageView
+        android:id="@+id/signal_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="12dp"
+        android:src="@android:drawable/ic_dialog_map"
+        android:contentDescription="Signal strength"
+        android:tint="@android:color/white" />
 
     <TextView
-        android:id="@+id/tvSsid"
+        android:id="@+id/ssid_text"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:text="SSID_NAME"
-        android:textColor="#FFFFFF"
+        android:layout_height="wrap_content"
+        android:text="SSID"
+        android:textColor="@android:color/white"
         android:textSize="16sp" />
 
-    <ImageButton
-        android:id="@+id/btnMapSsid"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:src="@drawable/ic_map"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Map SSID"
-        app:tint="#2196F3" />
+    <TextView
+        android:id="@+id/rssi_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="-70 dBm"
+        android:textColor="@android:color/white"
+        android:textSize="14sp" />
 
 </LinearLayout>

@@ -1,11 +1,6 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
-    alias(libs.plugins.android.application) apply false
-    // --- FIX: Corrected the alias for the Kotlin Android plugin ---
-    alias(libs.plugins.kotlin.android) apply false
-    // --- End of Fix ---
-
-    // Defines the Google Services plugin needed for Firebase
-    id("com.google.gms.google-services") version "4.4.2" apply false
+    id("com.android.application") version "8.1.4" apply false
+    id("org.jetbrains.kotlin.android") version "1.9.21" apply false  // FIXED: Matches Compose 1.5.4
+    id("com.google.gms.google-services") version "4.4.0" apply false
 }
-
