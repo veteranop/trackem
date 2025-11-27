@@ -54,30 +54,26 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize osmdroid
         Configuration.getInstance().load(applicationContext, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
-
-        // Inflate ViewBinding
         binding = ActivityMainBinding.inflate(layoutInflater)
 
-        // ONLY COMPOSE — NO setContentView() → fixes crash
         setContent {
             TrackEmMobileTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // This safely embeds your entire XML layout into Compose
                     AndroidView(factory = { binding.root })
                 }
             }
         }
 
-        // === ALL YOUR EXISTING CODE BELOW (unchanged) ===
+        setupUI()
+    }
+
+    private fun setupUI() {
         firebaseAnalytics = Firebase.analytics
-        firebaseAnalytics.logEvent("app_opened") {
-            param("user_name", "Mark")
-        }
+        firebaseAnalytics.logEvent("app_opened") { param("user_name", "Mark") }
 
         binding.trackemLogo.setImageResource(R.drawable.trackem_logo)
 
@@ -87,24 +83,16 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
 
         val deviceActionHandler: (DeviceFingerprint, String) -> Unit = { device, action ->
             when (action) {
-                "details" -> {
-                    firebaseAnalytics.logEvent("view_device_details") {
-                        param("device_mac", device.mac ?: "unknown")
-                        param("device_type", device.makeModel)
-                    }
-                    startActivity(Intent(this, DetailActivity::class.java).apply {
-                        putExtra("device", device)
-                    })
-                }
+                "details" -> startActivity(Intent(this, DetailActivity::class.java).apply { putExtra("device", device) })
                 "rename" -> showRenameDialog(device)
                 "target" -> {
                     targetDevice = device
-                    Toast.makeText(this, "Target set to ${device.finalDisplayName}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Target: ${device.finalDisplayName}", Toast.LENGTH_SHORT).show()
                 }
                 "ignore" -> {
                     ignored.add(device.fingerprintKey())
                     updateAllLists()
-                    Toast.makeText(this, "Ignoring ${device.finalDisplayName}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Ignored ${device.finalDisplayName}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -113,34 +101,16 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
         wifiApAdapter = DeviceAdapter(deviceActionHandler)
         bleOnlyDeviceAdapter = DeviceAdapter(deviceActionHandler)
 
-        binding.recyclerDevices.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = mobileDeviceAdapter
-        }
-        binding.recyclerWifiApDevices.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = wifiApAdapter
-        }
-        binding.recyclerBleOnlyDevices.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = bleOnlyDeviceAdapter
-        }
+        binding.recyclerDevices.apply { layoutManager = LinearLayoutManager(this@MainActivity); adapter = mobileDeviceAdapter }
+        binding.recyclerWifiApDevices.apply { layoutManager = LinearLayoutManager(this@MainActivity); adapter = wifiApAdapter }
+        binding.recyclerBleOnlyDevices.apply { layoutManager = LinearLayoutManager(this@MainActivity); adapter = bleOnlyDeviceAdapter }
 
         binding.btnHome.setOnClickListener { showHome() }
-        binding.btnStop.setOnClickListener {
-            scanner?.stop()
-            scanner = null
-            showHome()
-        }
+        binding.btnStop.setOnClickListener { scanner?.stop(); scanner = null; showHome() }
         binding.btnPause.setOnClickListener {
             scanner?.let {
-                if (it.isRunning) {
-                    it.stop()
-                    binding.btnPause.text = "Resume"
-                } else {
-                    it.start()
-                    binding.btnPause.text = "Pause"
-                }
+                if (it.isRunning) { it.stop(); binding.btnPause.text = "Resume" }
+                else { it.start(); binding.btnPause.text = "Pause" }
             }
         }
 
@@ -149,16 +119,21 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
         binding.btnAbout.setOnClickListener { startActivity(Intent(this, AboutActivity::class.java)) }
 
         binding.fabMapAll.setOnClickListener {
-            firebaseAnalytics.logEvent("map_all_devices_tapped", null)
             val allDevices = mobileDeviceAdapter.getCurrentList() + wifiApAdapter.getCurrentList() + bleOnlyDeviceAdapter.getCurrentList()
             val bssids = allDevices.mapNotNull { it.bestApBssidForWigle }.toTypedArray()
             if (bssids.isNotEmpty()) {
-                startActivity(Intent(this, MapActivity::class.java).apply {
-                    putExtra("bssids", bssids)
-                })
+                startActivity(Intent(this, MapActivity::class.java).apply { putExtra("bssids", bssids) })
             } else {
                 Toast.makeText(this, "No BSSIDs to map", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    override fun onBackPressed() {
+        if (binding.scanLayout.visibility == View.VISIBLE) {
+            showHome()
+        } else {
+            super.onBackPressed()
         }
     }
 
@@ -204,7 +179,7 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
 
         AlertDialog.Builder(this)
             .setTitle("Rename Device")
-            .setMessage("Enter an alias for ${device.displayName}")
+            .setMessage("Enter alias for ${device.displayName}")
             .setView(editText)
             .setPositiveButton("Save") { _, _ ->
                 val customName = editText.text.toString()
@@ -212,7 +187,6 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
                     param("device_mac", device.mac ?: "unknown")
                     param("has_custom_name", customName.isNotBlank().toString())
                 }
-
                 val prefs = getSharedPreferences("CustomNames", Context.MODE_PRIVATE)
                 with(prefs.edit()) {
                     if (customName.isBlank()) remove(deviceKey) else putString(deviceKey, customName)
@@ -228,18 +202,13 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
     private fun showBackgroundLocationDialog() {
         AlertDialog.Builder(this)
             .setTitle("Background Location Required")
-            .setMessage("For continuous Wi-Fi scanning, this app requires 'Allow all the time' location permission.")
-            .setPositiveButton("Go to Settings") { _, _ ->
+            .setMessage("For continuous scanning, grant 'Allow all the time' location permission.")
+            .setPositiveButton("Settings") { _, _ ->
                 startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = Uri.fromParts("package", packageName, null)
                 })
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
-                dialog.dismiss()
-                Toast.makeText(this, "Background location is needed for this scan type.", Toast.LENGTH_LONG).show()
-                pendingScanMode = null
-            }
-            .create()
+            .setNegativeButton("Cancel") { _, _ -> pendingScanMode = null }
             .show()
     }
 
@@ -279,27 +248,24 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
             val sortedWifi = wifiApDevices.sortedByDescending { it.lastRssi }
             val sortedBle = bleOnlyDevices.sortedByDescending { it.lastRssi }
 
-            val filteredMobile = sortedMobile.filter { !ignored.contains(it.fingerprintKey()) }
-            val filteredWifi = sortedWifi.filter { !ignored.contains(it.fingerprintKey()) }
-            val filteredBle = sortedBle.filter { !ignored.contains(it.fingerprintKey()) }
-
-            mobileDeviceAdapter.updateList(filteredMobile)
-            wifiApAdapter.updateList(filteredWifi)
-            bleOnlyDeviceAdapter.updateList(filteredBle)
+            mobileDeviceAdapter.updateList(sortedMobile.filter { !ignored.contains(it.fingerprintKey()) })
+            wifiApAdapter.updateList(sortedWifi.filter { !ignored.contains(it.fingerprintKey()) })
+            bleOnlyDeviceAdapter.updateList(sortedBle.filter { !ignored.contains(it.fingerprintKey()) })
         }
     }
 
     private fun showApiMenu(anchor: View) {
-        val popup = PopupMenu(this, anchor)
-        popup.menuInflater.inflate(R.menu.api_keys_menu, popup.menu)
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                R.id.action_set_wigle_key -> showWigleKeyDialog()
-                R.id.action_set_shodan_key -> showShodanKeyDialog()
+        PopupMenu(this, anchor).apply {
+            menuInflater.inflate(R.menu.api_keys_menu, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_set_wigle_key -> showWigleKeyDialog()
+                    R.id.action_set_shodan_key -> showShodanKeyDialog()
+                }
+                true
             }
-            true
+            show()
         }
-        popup.show()
     }
 
     private fun showWigleKeyDialog() {
@@ -330,18 +296,18 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
         layout.addView(apiTokenInput)
 
         AlertDialog.Builder(this)
-            .setTitle("Enter WiGLE Credentials")
+            .setTitle("WiGLE Credentials")
             .setView(layout)
             .setPositiveButton("Save") { _, _ ->
-                val apiName = apiNameInput.text.toString()
-                val apiToken = apiTokenInput.text.toString()
-                if (apiName.isBlank() || apiToken.isBlank()) {
-                    Toast.makeText(this, "Both fields are required", Toast.LENGTH_SHORT).show()
+                val name = apiNameInput.text.toString()
+                val token = apiTokenInput.text.toString()
+                if (name.isNotBlank() && token.isNotBlank()) {
+                    val creds = "$name:$token"
+                    val encoded = Base64.encodeToString(creds.toByteArray(), Base64.NO_WRAP)
+                    prefs.edit().putString("wigle_api_key", encoded).apply()
+                    Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
                 } else {
-                    val credentials = "$apiName:$apiToken"
-                    val base64Credentials = Base64.encodeToString(credentials.toByteArray(), Base64.NO_WRAP)
-                    prefs.edit().putString("wigle_api_key", base64Credentials).apply()
-                    Toast.makeText(this, "WiGLE Credentials saved", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Both fields required", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -350,16 +316,17 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
 
     private fun showShodanKeyDialog() {
         val editText = EditText(this)
-        val prefs = getSharedPreferences("prefs", Context.MODE_PRIVATE)
-        editText.setText(prefs.getString("shodan_api_key", ""))
+        editText.setText(getSharedPreferences("prefs", Context.MODE_PRIVATE).getString("shodan_api_key", ""))
 
         AlertDialog.Builder(this)
-            .setTitle("Enter Shodan API Key")
+            .setTitle("Shodan API Key")
             .setView(editText)
             .setPositiveButton("Save") { _, _ ->
-                val key = editText.text.toString()
-                prefs.edit().putString("shodan_api_key", key).apply()
-                Toast.makeText(this, "Shodan API Key saved", Toast.LENGTH_SHORT).show()
+                getSharedPreferences("prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("shodan_api_key", editText.text.toString())
+                    .apply()
+                Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)
             .show()
