@@ -15,9 +15,6 @@ import android.util.Log
 import com.google.gson.Gson
 import com.veteranop.trackem.ui.hunting.HuntingViewModel
 import com.veteranop.trackem.utils.LocationHelper
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import okhttp3.*
 import java.io.IOException
 import java.util.Locale
@@ -54,6 +51,10 @@ class DeviceScanner(
     private val gson = Gson()
     private val customNamePrefs = context.getSharedPreferences("CustomNames", Context.MODE_PRIVATE)
 
+    private var scanCount = 0
+    private var nextRhid = 1
+    private val hostKeyToRhid = mutableMapOf<String, Int>()
+
     private val DEVICE_EXPIRATION_MS = 10000L
     private val UI_UPDATE_INTERVAL_MS = 2000L
 
@@ -62,9 +63,7 @@ class DeviceScanner(
             if (!isRunning) return
             try {
                 val results = wifiManager?.scanResults
-                if (results != null) {
-                    processWifiResults(results)
-                }
+                if (results != null) processWifiResults(results)
             } catch (e: SecurityException) {
                 Log.w(TAG, "Missing permission for wifiManager.scanResults", e)
             }
@@ -81,11 +80,7 @@ class DeviceScanner(
     private val wifiScanRunnable = object : Runnable {
         override fun run() {
             if (!isRunning) return
-            try {
-                wifiManager?.startScan()
-            } catch (e: SecurityException) {
-                Log.e(TAG, "Missing permission for wifiManager.startScan()", e)
-            }
+            try { wifiManager?.startScan() } catch (e: SecurityException) { }
             handler.postDelayed(this, 10000)
         }
     }
@@ -103,11 +98,9 @@ class DeviceScanner(
         isRunning = true
         when (mode) {
             AppScanMode.MOBILE_DEVICES, AppScanMode.WIFI_APS -> startWifiScan()
-            AppScanMode.BLUETOOTH -> { /* No Wi-Fi */ }
+            AppScanMode.BLUETOOTH -> { }
         }
-        if (mode != AppScanMode.WIFI_APS) {
-            startBleScan()
-        }
+        if (mode != AppScanMode.WIFI_APS) startBleScan()
         handler.postDelayed(uiUpdateRunnable, UI_UPDATE_INTERVAL_MS)
     }
 
@@ -123,9 +116,7 @@ class DeviceScanner(
         val scanSettings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_POWER).build()
         try {
             bluetoothAdapter?.bluetoothLeScanner?.startScan(null, scanSettings, bleCallback)
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Bluetooth scanning permission missing on start.", e)
-        }
+        } catch (e: SecurityException) { }
     }
 
     fun stop() {
@@ -134,30 +125,43 @@ class DeviceScanner(
         handler.removeCallbacks(wifiScanRunnable)
         handler.removeCallbacks(uiUpdateRunnable)
         try { context.unregisterReceiver(wifiReceiver) } catch (e: Exception) { }
-        try {
-            bluetoothAdapter?.bluetoothLeScanner?.stopScan(bleCallback)
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Bluetooth scanning permission missing on stop.", e)
-        }
+        try { bluetoothAdapter?.bluetoothLeScanner?.stopScan(bleCallback) } catch (e: SecurityException) { }
     }
 
     private fun processWifiResults(results: List<android.net.wifi.ScanResult>) {
         for (result in results) {
             val mac = result.BSSID
-            val fp = devices.getOrPut(mac) {
+            var fp = devices.getOrPut(mac) {
                 val customName = customNamePrefs.getString(mac, null)
-                DeviceFingerprint(mac = mac, customName = customName).also { fetchVendorForDevice(it) }
+                DeviceFingerprint(mac = mac, customName = customName).apply { allMacs.add(mac) }
             }
+
+            fp.addMac(mac)
+            fp.addWifiProbe(result.SSID, result.level, result.BSSID)
+
             if (result.SSID.isNotEmpty()) {
                 fp.isWifiAP = true
                 fp.displayName = result.SSID
             }
-            fp.addWifiProbe(result.SSID, result.level, result.BSSID)
 
-// === HUNTING MODE – WIFI ===
-            if (HuntingViewModel.isHunting &&
-                result.BSSID.equals(HuntingViewModel.currentTargetMac, ignoreCase = true)) {
+            // RHID ASSIGNMENT (after 3 scans)
+            if (scanCount >= 3 && fp.isRandomizedMac && !fp.isRandomizedHost) {
+                val hostKey = fp.generateHostKey()
+                val existingRhid = hostKeyToRhid[hostKey]
+                if (existingRhid != null) {
+                    fp.rhid = existingRhid
+                } else {
+                    fp.rhid = nextRhid++
+                    hostKeyToRhid[hostKey] = fp.rhid
+                }
+                fp.isRandomizedHost = true
+            }
 
+            // NO MAC LOOKUP FOR RANDOMIZED
+            if (!fp.isRandomizedHost) fetchVendorForDevice(fp)
+
+            // HUNTING MODE
+            if (HuntingViewModel.isHunting && mac.equals(HuntingViewModel.currentTargetMac, ignoreCase = true)) {
                 val location = LocationHelper.getLastLocation(context) ?: continue
                 HuntingViewModel.instance?.addSample(
                     lat = location.latitude,
@@ -165,33 +169,43 @@ class DeviceScanner(
                     rssi = result.level
                 )
             }
-// === END HUNTING ===
         }
+        scanCount++
     }
 
     private fun processBleResult(result: ScanResult) {
         val mac = result.device.address
-        val fp = devices.getOrPut(mac) {
+        var fp = devices.getOrPut(mac) {
             val customName = customNamePrefs.getString(mac, null)
-            DeviceFingerprint(mac = mac, bleAddress = mac, customName = customName).also { fetchVendorForDevice(it) }
+            DeviceFingerprint(mac = mac, bleAddress = mac, customName = customName).apply { allMacs.add(mac) }
         }
+
         val interval = if (result.periodicAdvertisingInterval != 0) result.periodicAdvertisingInterval * 1.25 else null
         val txPower = if (result.txPower != 127) result.txPower else null
         val mfgData = result.scanRecord?.bytes?.let { bytesToHex(it) }
 
         fp.addBleSample(result.rssi, interval?.toInt(), txPower, mfgData)
 
-        // Try to get name (requires BLUETOOTH_CONNECT)
-        try {
-            fp.bleName = result.device.name
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Missing BLUETOOTH_CONNECT permission to get device name for $mac")
+        try { fp.bleName = result.device.name } catch (e: SecurityException) { }
+
+        // RHID ASSIGNMENT (after 3 scans)
+        if (scanCount >= 3 && fp.isRandomizedMac && !fp.isRandomizedHost) {
+            val hostKey = fp.generateHostKey()
+            val existingRhid = hostKeyToRhid[hostKey]
+            if (existingRhid != null) {
+                fp.rhid = existingRhid
+            } else {
+                fp.rhid = nextRhid++
+                hostKeyToRhid[hostKey] = fp.rhid
+            }
+            fp.isRandomizedHost = true
         }
 
-// === HUNTING MODE – BLE ===
-        if (HuntingViewModel.isHunting &&
-            result.device.address.equals(HuntingViewModel.currentTargetMac, ignoreCase = true)) {
+        // NO MAC LOOKUP FOR RANDOMIZED
+        if (!fp.isRandomizedHost) fetchVendorForDevice(fp)
 
+        // HUNTING MODE
+        if (HuntingViewModel.isHunting && result.device.address.equals(HuntingViewModel.currentTargetMac, ignoreCase = true)) {
             val location = LocationHelper.getLastLocation(context) ?: return
             HuntingViewModel.instance?.addSample(
                 lat = location.latitude,
@@ -199,7 +213,6 @@ class DeviceScanner(
                 rssi = result.rssi
             )
         }
-// === END HUNTING ===
     }
 
     private fun fetchVendorForDevice(fp: DeviceFingerprint) {
@@ -209,9 +222,7 @@ class DeviceScanner(
         val request = Request.Builder().url(url).build()
 
         client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e(TAG, "MAC lookup failed for $macToLookup", e)
-            }
+            override fun onFailure(call: Call, e: IOException) { }
             override fun onResponse(call: Call, response: Response) {
                 if (!response.isSuccessful) return
                 try {
@@ -221,9 +232,7 @@ class DeviceScanner(
                         fp.macVendor = result.companyName
                         fp.updateVendorInfo()
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to parse MAC lookup response for $macToLookup", e)
-                }
+                } catch (e: Exception) { }
             }
         })
     }
