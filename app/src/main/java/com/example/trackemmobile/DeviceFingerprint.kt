@@ -2,6 +2,7 @@ package com.example.trackemmobile
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
+import java.util.UUID
 
 private val MOBILE_VENDORS = setOf(
     "apple", "samsung", "google", "oneplus", "huawei", "lg",
@@ -28,7 +29,7 @@ data class DeviceFingerprint(
     var bleManufacturerData: String? = null,
     var macVendor: String? = null,
 
-    // RANDOMIZATION TRACKING
+    // RHID SYSTEM
     var rhid: Int = 0,
     var isRandomizedHost: Boolean = false,
     var allMacs: MutableSet<String> = mutableSetOf()
@@ -95,8 +96,14 @@ data class DeviceFingerprint(
             else -> "Unknown"
         }
 
-        if (!isWifiAP) {
+        // ONLY set displayName if it's still default
+        if (displayName == "Unknown Device" && !isWifiAP) {
             displayName = bleName ?: macVendor ?: makeModel
+        }
+
+        // Show RHID if randomized
+        if (isRandomizedHost) {
+            displayName = "RHID-$rhid"
         }
     }
 
