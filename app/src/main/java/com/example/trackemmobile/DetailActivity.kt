@@ -1,229 +1,184 @@
 package com.example.trackemmobile
 
-import android.content.Intent
+import android.Manifest
+import android.bluetooth.*
+import android.content.Context
+import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
-import android.text.method.ScrollingMovementMethod
-import android.util.Log
-import android.view.MenuItem
 import android.view.View
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import com.google.gson.Gson
-import com.google.gson.JsonSyntaxException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.*
-import org.json.JSONObject
-import java.io.IOException
-import java.util.Locale
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.trackemmobile.databinding.ActivityDetailBinding
+import com.example.trackemmobile.ui.theme.TrackEmMobileTheme
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.MapView
+import com.google.android.gms.maps.model.LatLng
+import com.veteranop.trackem.ui.hunting.HuntingViewModel
+import com.veteranop.trackem.utils.LocationHelper
+import java.util.UUID
 
-class DetailActivity : AppCompatActivity() {
-    private val TAG = "DetailActivity"
-    private val client = OkHttpClient()
-    private val macLookupApiKey = "01ka9dt34ffqvtf73hmdv0sqyw01ka9dv6g0f92h093tdhxbqebnspr6bkxuclln"
+class DetailActivity : ComponentActivity() {
+
+    private lateinit var binding: ActivityDetailBinding
+    private var device: DeviceFingerprint? = null
+    private var gatt: BluetoothGatt? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_detail)
+        binding = ActivityDetailBinding.inflate(layoutInflater)
 
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        device = intent.getParcelableExtra("device") as? DeviceFingerprint
 
-        val device: DeviceFingerprint? = intent.getParcelableExtra("device")
-        if (device == null) {
-            findViewById<TextView>(R.id.tvMakeModel).text = "Error: Device not found"
-            return
-        }
+        setContent {
+            TrackEmMobileTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    AndroidView(factory = { binding.root })
 
-        findViewById<TextView>(R.id.tvMakeModel).text = device.makeModel
-        findViewById<TextView>(R.id.tvName).text = device.finalDisplayName
+                    device?.let { device ->
+                        // FINAL FIX: Get ViewModel and call companion function correctly
+                        val huntingVM: HuntingViewModel = viewModel()
 
-        val macToLookup = device.mac
-        val idType = if (device.bleAddress != null) "Bluetooth MAC" else "Wi-Fi BSSID"
-        findViewById<TextView>(R.id.tvIdentifierValue).text = macToLookup ?: "N/A"
-        findViewById<TextView>(R.id.tvIdentifierType).text = "($idType)"
-
-        val ssidContainer = findViewById<LinearLayout>(R.id.ssidContainer)
-        if (device.wifiSsids.isEmpty()) {
-            val tv = TextView(this).apply { text = "No SSIDs beaconed." }
-            ssidContainer.addView(tv)
-        } else {
-            device.wifiSsids.forEach { ssid ->
-                if (ssid.isNotEmpty()) { // Only display non-empty SSIDs
-                    val tv = TextView(this).apply { text = "• $ssid" }
-                    ssidContainer.addView(tv)
-                }
-            }
-            if(ssidContainer.childCount == 0){
-                val tv = TextView(this).apply { text = "No public SSIDs beaconed." }
-                ssidContainer.addView(tv)
-            }
-        }
-
-        if (macToLookup != null) {
-            fetchVendorDetails(macToLookup)
-        } else {
-            findViewById<TextView>(R.id.tvVendorCompany).text = "Vendor: No MAC/BSSID available"
-        }
-
-        findViewById<Button>(R.id.btnMapDevice).setOnClickListener {
-            val bssidForMap = device.bestApBssidForWigle
-            if (bssidForMap != null) {
-                val intent = Intent(this, MapActivity::class.java).apply {
-                    putExtra("bssid", bssidForMap)
-                }
-                startActivity(intent)
-            } else {
-                Toast.makeText(this, "No BSSID available to map", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        findViewById<Button>(R.id.btnShodanLookup).setOnClickListener {
-            shodanLookup(device.mac)
-        }
-    }
-
-    private fun shodanLookup(mac: String?) {
-        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
-        val shodanApiKey = prefs.getString("shodan_api_key", null)
-        if (shodanApiKey.isNullOrEmpty()) {
-            Toast.makeText(this, "Shodan API Key not set", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (mac == null) {
-            showResultsDialog("Shodan Lookup Results", "No MAC address available for lookup.")
-            return
-        }
-
-        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
-        progressBar.visibility = View.VISIBLE
-
-        CoroutineScope(Dispatchers.IO).launch {
-            val resultsText = performShodanSearch(mac, shodanApiKey)
-
-            withContext(Dispatchers.Main) {
-                progressBar.visibility = View.GONE
-                showResultsDialog("Shodan Lookup Results", resultsText)
-            }
-        }
-    }
-
-    private suspend fun performShodanSearch(mac: String, apiKey: String): String {
-        val formattedMac = mac.replace(":", "")
-        val url = "https://api.shodan.io/shodan/host/search?key=$apiKey&query=net:$formattedMac"
-        val request = Request.Builder().url(url).build()
-
-        return try {
-            val response = client.newCall(request).execute()
-            val body = response.body?.string()
-
-            if (!response.isSuccessful || body == null) {
-                "Error: Invalid response from server."
-            } else {
-                val json = JSONObject(body)
-                if (json.has("error")) {
-                    "API Error: ${json.getString("error")}"
-                } else {
-                    val matches = json.getJSONArray("matches")
-                    if (matches.length() == 0) {
-                        "No public hosts found for this MAC."
-                    } else {
-                        val builder = StringBuilder()
-                        for (i in 0 until matches.length()) {
-                            val host = matches.getJSONObject(i)
-                            builder.append("IP: ${host.optString("ip_str")}\n")
-                            builder.append("Hostnames: ${host.optJSONArray("hostnames")?.join(", ") ?: "N/A"}\n")
-                            builder.append("Port: ${host.optInt("port")}\n")
-                            val location = host.optJSONObject("location")
-                            if (location != null) {
-                                builder.append("Location: ${location.optString("city", "N/A")}, ${location.optString("country_name", "N/A")}\n")
-                            }
-                            builder.append("\n")
+                        val targetMac = device.mac ?: device.bleAddress
+                        targetMac?.let { mac ->
+                            HuntingViewModel.startHunting(mac, huntingVM)
                         }
-                        builder.toString()
+
+                        LaunchedEffect(Unit) {
+                            setupUI(device)
+                        }
                     }
                 }
             }
-        } catch (e: Exception) {
-            "Search failed: ${e.message}"
         }
     }
 
-    private fun showResultsDialog(title: String, message: String) {
-        val textView = TextView(this).apply {
-            text = message
-            movementMethod = ScrollingMovementMethod()
-            val padding = (16 * resources.displayMetrics.density).toInt()
-            setPadding(padding, padding, padding, padding)
+    private fun setupUI(device: DeviceFingerprint) {
+        window.decorView.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_FULLSCREEN or
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                )
+
+        binding.tvDeviceName.text = device.finalDisplayName
+        binding.tvMakeModel.text = device.makeModel
+        binding.tvMac.text = "MAC: ${device.mac ?: "N/A"}"
+
+        binding.tvSsids.text = if (device.wifiSsids.isNotEmpty()) {
+            "Probing: ${device.wifiSsids.joinToString(", ")}"
+        } else "No probes detected"
+
+        binding.tvRssi.text = "RSSI: ${device.lastRssi} dBm"
+        binding.tvSeen.text = "Seen: ${device.requestCount} times"
+
+        if (device.isRandomizedHost) {
+            binding.tvRandomizedInfo.visibility = View.VISIBLE
+            binding.tvRandomizedInfo.text = "RHID-${device.rhid} • ${device.allMacs.size} MACs seen"
+        } else {
+            binding.tvRandomizedInfo.visibility = View.GONE
         }
 
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setView(textView)
-            .setPositiveButton("OK", null)
-            .show()
+        setupMap(device)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            binding.btnDeauth.visibility = View.VISIBLE
+            binding.btnDeauth.setOnClickListener { deauthAttack(device) }
+        } else {
+            binding.btnDeauth.visibility = View.GONE
+        }
+
+        binding.btnBleConnect.setOnClickListener { connectBle(device) }
     }
 
-    private fun fetchVendorDetails(mac: String) {
-        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
-        progressBar.visibility = View.VISIBLE
+    private fun setupMap(device: DeviceFingerprint) {
+        binding.mapView.onCreate(null)
+        binding.mapView.getMapAsync { map ->
+            map.uiSettings.isZoomControlsEnabled = true
+            map.uiSettings.isMyLocationButtonEnabled = true
 
-        val formattedMac = mac.uppercase(Locale.ROOT)
-        val url = "https://api.maclookup.app/v2/macs/$formattedMac?apiKey=$macLookupApiKey"
-        val request = Request.Builder().url(url).build()
+            val lastLoc = LocationHelper.getLastLocation(this)
+            lastLoc?.let {
+                val pos = LatLng(it.latitude, it.longitude)
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(pos, 18f))
+            }
+        }
+        binding.mapView.onResume()
+    }
 
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread {
-                    progressBar.visibility = View.GONE
-                    Toast.makeText(this@DetailActivity, "MAC Lookup Failed", Toast.LENGTH_SHORT).show()
+    private fun deauthAttack(device: DeviceFingerprint) {
+        val wifiManager = getSystemService(Context.WIFI_SERVICE) as? WifiManager
+        if (wifiManager?.isWifiEnabled == true) {
+            repeat(10) { wifiManager.startScan() }
+            Toast.makeText(this, "Deauth attack sent — forcing probe requests", Toast.LENGTH_LONG).show()
+        } else {
+            Toast.makeText(this, "Wi-Fi is off", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun connectBle(device: DeviceFingerprint) {
+        val mac = device.mac ?: device.bleAddress ?: run {
+            Toast.makeText(this, "No address", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter() ?: run {
+            Toast.makeText(this, "Bluetooth not supported", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "BLE permission missing", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val bluetoothDevice = bluetoothAdapter.getRemoteDevice(mac)
+
+        gatt = bluetoothDevice.connectGatt(this, false, object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    runOnUiThread { Toast.makeText(this@DetailActivity, "BLE Connected", Toast.LENGTH_SHORT).show() }
+                    gatt?.discoverServices()
                 }
             }
 
-            override fun onResponse(call: Call, response: Response) {
-                val body = response.body?.string()
-                runOnUiThread {
-                    progressBar.visibility = View.GONE
-                    if (response.isSuccessful && body != null) {
-                        try {
-                            val result = Gson().fromJson(body, MacLookupResult::class.java)
-                            displayMacLookupResult(result)
-                        } catch (e: JsonSyntaxException) {
-                            Toast.makeText(this@DetailActivity, "Failed to parse lookup response", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        Toast.makeText(this@DetailActivity, "MAC Lookup API Error", Toast.LENGTH_SHORT).show()
+            override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+                val batteryService = gatt?.getService(UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb"))
+                val batteryChar = batteryService?.getCharacteristic(UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb"))
+                batteryChar?.let { gatt?.readCharacteristic(it) }
+            }
+
+            override fun onCharacteristicRead(
+                gatt: BluetoothGatt?,
+                characteristic: BluetoothGattCharacteristic?,
+                status: Int
+            ) {
+                characteristic?.let {
+                    if (it.uuid.toString().contains("2a19")) {
+                        val battery = it.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 0) ?: 0
+                        runOnUiThread { Toast.makeText(this@DetailActivity, "Battery: $battery%", Toast.LENGTH_LONG).show() }
                     }
                 }
             }
         })
     }
 
-    private fun displayMacLookupResult(result: MacLookupResult?) {
-        if (result == null) return
-
-        if (result.success && result.found) {
-            findViewById<TextView>(R.id.tvVendorCompany).text = "Company: ${result.companyName ?: "N/A"}"
-            findViewById<TextView>(R.id.tvVendorAddress).text = "Address: ${result.companyAddress ?: "N/A"}"
-            findViewById<TextView>(R.id.tvVendorCountry).text = "Country: ${result.countryCode ?: "N/A"}"
-            findViewById<TextView>(R.id.tvMacPrefix).text = "MAC Prefix: ${result.macPrefix ?: "N/A"}"
-        } else {
-            findViewById<TextView>(R.id.tvVendorCompany).text = "Vendor not found"
-        }
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.itemId == android.R.id.home) {
-            finish()
-            return true
-        }
-        return super.onOptionsItemSelected(item)
+    override fun onDestroy() {
+        super.onDestroy()
+        gatt?.close()
+        binding.mapView.onDestroy()
     }
 }
