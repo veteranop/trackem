@@ -1,4 +1,4 @@
-package com.example.trackemmobile
+package com.veteranop.trackem
 
 import android.graphics.Color
 import android.view.LayoutInflater

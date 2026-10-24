@@ -1,4 +1,4 @@
-package com.example.trackemmobile
+package com.veteranop.trackem
 
 import android.Manifest
 import android.content.Context

@@ -13,3 +13,21 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# --- Kotlin / Gradle build output (was being committed) ---------------------
+.kotlin/
+.gradle/
+
+# --- Local secrets: NEVER commit --------------------------------------------
+# Firebase config carries an API key — generate your own from the Firebase
+# console for package com.veteranop.trackem.
+app/google-services.json
+google-services.json
+MACLOOKUP_API_KEY*
+*.jks
+*.keystore
+
+# --- Build artifacts --------------------------------------------------------
+*.apk
+*.aab
+*.ap_

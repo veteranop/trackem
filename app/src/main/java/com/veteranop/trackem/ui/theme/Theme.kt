@@ -1,4 +1,4 @@
-package com.example.trackemmobile.ui.theme
+package com.veteranop.trackem.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme

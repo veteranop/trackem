@@ -94,12 +94,12 @@
             android:layout_marginTop="24dp"
             android:background="#000000" />
 
-        <!-- Deauth Attack Button -->
+        <!-- Wi-Fi rescan button. NOT a deauth: it just asks WifiManager to re-scan. -->
         <Button
             android:id="@+id/btnDeauth"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="FORCE PROBE REQUESTS (DEAUTH)"
+            android:text="FORCE WI-FI RESCAN (10x)"
             android:textColor="#FFFFFF"
             android:backgroundTint="#FFFF5722"
             android:textStyle="bold"

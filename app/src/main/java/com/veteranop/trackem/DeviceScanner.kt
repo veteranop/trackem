@@ -1,4 +1,4 @@
-package com.example.trackemmobile
+package com.veteranop.trackem
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.le.ScanCallback
@@ -46,7 +46,8 @@ class DeviceScanner(
         private set
     private val devices = ConcurrentHashMap<String, DeviceFingerprint>()
     private val TAG = "DeviceScanner"
-    private val macLookupApiKey = "REDACTED_MACLOOKUP_KEY"
+    // Injected at build time from local.properties / env — never commit a real key.
+    private val macLookupApiKey = BuildConfig.MACLOOKUP_API_KEY
     private val client = OkHttpClient()
     private val gson = Gson()
     private val customNamePrefs = context.getSharedPreferences("CustomNames", Context.MODE_PRIVATE)
@@ -239,6 +240,9 @@ class DeviceScanner(
 
     private fun fetchVendorForDevice(fp: DeviceFingerprint) {
         val macToLookup = fp.mac ?: return
+        // No key configured at build time → skip the lookup instead of hammering
+        // the API with an empty key (maclookup.app returns 401 for that).
+        if (macLookupApiKey.isBlank()) return
         val formattedMac = macToLookup.replace(":", "").uppercase(Locale.ROOT)
         val url = "https://api.maclookup.app/v2/macs/$formattedMac?apiKey=$macLookupApiKey"
         val request = Request.Builder().url(url).build()

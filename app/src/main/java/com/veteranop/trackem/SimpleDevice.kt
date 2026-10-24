@@ -1,4 +1,4 @@
-package com.example.trackemmobile
+package com.veteranop.trackem
 
 data class SimpleDevice(
     val bleName: String?,

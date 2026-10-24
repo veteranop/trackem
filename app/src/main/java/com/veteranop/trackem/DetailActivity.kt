@@ -1,4 +1,4 @@
-package com.example.trackemmobile
+package com.veteranop.trackem
 
 import android.Manifest
 import android.bluetooth.*
@@ -19,8 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.trackemmobile.databinding.ActivityDetailBinding
-import com.example.trackemmobile.ui.theme.TrackEmMobileTheme
+import com.veteranop.trackem.databinding.ActivityDetailBinding
+import com.veteranop.trackem.ui.theme.TrackEmMobileTheme
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
@@ -96,7 +96,7 @@ class DetailActivity : ComponentActivity() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             binding.btnDeauth.visibility = View.VISIBLE
-            binding.btnDeauth.setOnClickListener { deauthAttack(device) }
+            binding.btnDeauth.setOnClickListener { triggerWifiRescan(device) }
         } else {
             binding.btnDeauth.visibility = View.GONE
         }
@@ -119,11 +119,17 @@ class DetailActivity : ComponentActivity() {
         binding.mapView.onResume()
     }
 
-    private fun deauthAttack(device: DeviceFingerprint) {
+    /**
+     * Nudges the Wi-Fi radio to re-scan so a device that is quiet on probe requests
+     * gets another chance to show up. This is NOT a deauthentication attack: a
+     * deauth needs raw 802.11 frame injection, which a stock, unrooted Android app
+     * cannot do. All this does is ask WifiManager to re-scan ten times in a row.
+     */
+    private fun triggerWifiRescan(device: DeviceFingerprint) {
         val wifiManager = getSystemService(Context.WIFI_SERVICE) as? WifiManager
         if (wifiManager?.isWifiEnabled == true) {
             repeat(10) { wifiManager.startScan() }
-            Toast.makeText(this, "Deauth attack sent — forcing probe requests", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Wi-Fi rescan requested — listening for probe requests", Toast.LENGTH_LONG).show()
         } else {
             Toast.makeText(this, "Wi-Fi is off", Toast.LENGTH_SHORT).show()
         }

@@ -1,4 +1,4 @@
-package com.example.trackemmobile
+package com.veteranop.trackem
 
 object MacToVendor {
     private val ouiMap = mapOf(

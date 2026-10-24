@@ -8,7 +8,7 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="com.example.trackemmobile" />
+                  <option name="appId" value="com.veteranop.trackem" />
                   <option name="mobileSdkAppId" value="1:748254142306:android:9668ad26f7910e93bb963b" />
                   <option name="projectId" value="veteranopcom" />
                   <option name="projectNumber" value="748254142306" />

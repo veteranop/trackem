@@ -1,4 +1,4 @@
-package com.example.trackemmobile
+package com.veteranop.trackem
 
 import android.Manifest
 import android.content.Context
@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.provider.Settings
 import android.util.Base64
 import android.view.View
@@ -25,8 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.example.trackemmobile.databinding.ActivityMainBinding
-import com.example.trackemmobile.ui.theme.TrackEmMobileTheme
+import com.veteranop.trackem.databinding.ActivityMainBinding
+import com.veteranop.trackem.ui.theme.TrackEmMobileTheme
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.ktx.analytics
 import com.google.firebase.analytics.ktx.logEvent
@@ -35,7 +36,7 @@ import org.osmdroid.config.Configuration
 
 class MainActivity : ComponentActivity(), DeviceScannerListener {
 
-    private lateinit var firebaseAnalytics: FirebaseAnalytics
+    private var firebaseAnalytics: FirebaseAnalytics? = null
     private var scanner: DeviceScanner? = null
     private lateinit var mobileDeviceAdapter: DeviceAdapter
     private lateinit var wifiApAdapter: DeviceAdapter
@@ -72,8 +73,16 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
     }
 
     private fun setupUI() {
-        firebaseAnalytics = Firebase.analytics
-        firebaseAnalytics.logEvent("app_opened") { param("user_name", "Mark") }
+        // Analytics is OPTIONAL: app/google-services.json is not committed, so a
+        // build without it has no default FirebaseApp — `Firebase.analytics` would
+        // throw IllegalStateException and take the whole app down on startup.
+        firebaseAnalytics = try {
+            Firebase.analytics
+        } catch (e: IllegalStateException) {
+            Log.i("MainActivity", "Firebase not configured — analytics disabled")
+            null
+        }
+        firebaseAnalytics?.logEvent("app_opened") { param("user_name", "Mark") }
 
         binding.trackemLogo.setImageResource(R.drawable.trackem_logo)
 
@@ -183,8 +192,9 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
             .setView(editText)
             .setPositiveButton("Save") { _, _ ->
                 val customName = editText.text.toString()
-                firebaseAnalytics.logEvent("device_renamed") {
-                    param("device_mac", device.mac ?: "unknown")
+                firebaseAnalytics?.logEvent("device_renamed") {
+                    // Deliberately no device MAC here: an analytics event must not
+                    // carry an observed device's identifier off the phone.
                     param("has_custom_name", customName.isNotBlank().toString())
                 }
                 val prefs = getSharedPreferences("CustomNames", Context.MODE_PRIVATE)
@@ -222,7 +232,7 @@ class MainActivity : ComponentActivity(), DeviceScannerListener {
 
     private fun showScan(mode: AppScanMode) {
         scanner?.stop()
-        firebaseAnalytics.logEvent("start_scan") { param("scan_mode", mode.name) }
+        firebaseAnalytics?.logEvent("start_scan") { param("scan_mode", mode.name) }
 
         binding.homeScroll.visibility = View.GONE
         binding.scanLayout.visibility = View.VISIBLE

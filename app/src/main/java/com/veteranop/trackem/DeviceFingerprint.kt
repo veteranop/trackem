@@ -1,4 +1,4 @@
-package com.example.trackemmobile
+package com.veteranop.trackem
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize

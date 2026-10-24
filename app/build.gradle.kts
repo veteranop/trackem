@@ -1,16 +1,45 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-parcelize")  // THIS WAS MISSING — fixes @Parcelize
-    id("com.google.gms.google-services")
+    // Firebase config (app/google-services.json) is NOT in the repo: it carries a
+    // Firebase API key, which must not live in git. Applied conditionally below.
+    id("com.google.gms.google-services") apply false
+}
+
+// --- secrets that must never be committed -----------------------------------
+// MACLOOKUP_API_KEY comes from local.properties (gitignored) or the environment
+// (CI: repository secret). Never hard-code it in source again.
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val macLookupApiKey: String =
+    localProps.getProperty("MACLOOKUP_API_KEY") ?: System.getenv("MACLOOKUP_API_KEY") ?: ""
+if (macLookupApiKey.isEmpty()) {
+    logger.lifecycle(
+        "TrackEm: MACLOOKUP_API_KEY not set (local.properties or env) — MAC vendor lookup " +
+        "will be skipped at runtime. Get a key at https://maclookup.app/api-v2"
+    )
+}
+
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.lifecycle(
+        "TrackEm: app/google-services.json not found — building without Firebase Analytics. " +
+        "Generate your own from the Firebase console (package com.veteranop.trackem)."
+    )
 }
 
 android {
-    namespace = "com.example.trackemmobile"
+    namespace = "com.veteranop.trackem"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.trackemmobile"
+        applicationId = "com.veteranop.trackem"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -18,6 +47,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+
+        // Injected into BuildConfig.MACLOOKUP_API_KEY — see the key block above.
+        buildConfigField("String", "MACLOOKUP_API_KEY", "\"$macLookupApiKey\"")
     }
 
     buildTypes {
@@ -39,6 +71,7 @@ android {
     buildFeatures {
         viewBinding = true
         compose = true
+        buildConfig = true   // needed for BuildConfig.MACLOOKUP_API_KEY
     }
 
     composeOptions {
